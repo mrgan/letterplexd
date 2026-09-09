@@ -54,6 +54,7 @@ letterboxd-plex-sync/
 | `UNMATCHED_RETRY_DAYS` | Days before re-attempting a previously unmatched film (default `14`) |
 | `MATCH_SCORE_THRESHOLD` | Minimum title-similarity score (0-1) to accept a fuzzy match when titles don't line up exactly (default `0.9`) |
 | `YEAR_TOLERANCE` | How many years a Plex result may differ from the Letterboxd year and still be considered the same film (default `1`) |
+| `WATCHLIST_LIMIT` | Sync only the N most recently added films; `0` or unset syncs the whole list (default `0`) |
 
 ### Getting a Plex token
 
@@ -97,6 +98,36 @@ For each Letterboxd entry (title + year parsed from the scraped watchlist page):
 The tolerance exists because Letterboxd and TMDb (which backs Plex Discover)
 routinely disagree by a year on release dates — festival premiere vs. general
 release. Widening it past 1 starts letting remakes back in.
+
+## Limiting to recent additions
+
+A long-lived watchlist accumulates films you no longer care about, so
+`WATCHLIST_LIMIT` syncs only the N most recently added and ignores the rest.
+
+The watchlist page carries no date-added attribute — the posters expose only
+name, slug, link, and a `data-postered-identifier` blob — and the explicit sort
+routes (`/watchlist/by/added/`) return 403 to a plain `requests` call, so
+ordering can't be requested or read directly. It's inferred instead: mean
+Letterboxd film ID falls steadily from ~284k in the first fifth of the list to
+~82k in the last, while mean release year barely moves (1989 → 1984). Since
+the list is sorted by neither film ID nor release year (about half the steps
+descend in each, i.e. no better than chance), that gradient is best explained
+by date-added ordering, newest first — recent additions skew toward
+recently-catalogued films.
+
+This is inference, not a documented contract. If Letterboxd changes its default
+sort, `WATCHLIST_LIMIT` would silently start keeping the wrong end of the list.
+Re-run the check in `logs/watchlist-order.md` if results look off.
+
+The limit is a *window on the newest N*, not a one-time "drop the bottom
+780" — that distinction matters as the list grows. Because the state file
+records everything already synced, films sliding out of the bottom of the
+window have been synced already, and new additions always enter at the top and
+get picked up. The window only fails if more than N films are added between two
+runs, which at the default 4-hour schedule is not a realistic concern.
+
+The limit also stops pagination early, so a small limit makes runs much faster
+(5 pages instead of 33 at `WATCHLIST_LIMIT=132`).
 
 ## Known limitations
 

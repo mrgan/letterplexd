@@ -70,6 +70,7 @@ def load_config() -> dict:
         "unmatched_retry_days": float(os.environ.get("UNMATCHED_RETRY_DAYS", "14")),
         "match_score_threshold": float(os.environ.get("MATCH_SCORE_THRESHOLD", "0.9")),
         "year_tolerance": int(os.environ.get("YEAR_TOLERANCE", "1")),
+        "watchlist_limit": int(os.environ.get("WATCHLIST_LIMIT", "0")),
     }
 
 
@@ -94,11 +95,15 @@ LETTERBOXD_USER_AGENT = (
 )
 
 
-def fetch_letterboxd_watchlist(username: str) -> list[WatchlistEntry]:
+def fetch_letterboxd_watchlist(username: str, limit: int = 0) -> list[WatchlistEntry]:
     # Letterboxd dropped the public watchlist RSS feed; the watchlist page itself
     # is still public, so we scrape it (paginated) instead. Its Cloudflare front
     # only challenges non-browser clients on other routes (e.g. /film/*/json/),
     # not this page, as long as a normal browser User-Agent is sent.
+    #
+    # The page lists films newest-added first, so `limit` keeps the N most
+    # recently added and stops paging early. See CLAUDE.md "Limiting to recent
+    # additions" for why that ordering is inferred rather than given.
     session = requests.Session()
     session.headers.update({"User-Agent": LETTERBOXD_USER_AGENT})
 
@@ -131,6 +136,9 @@ def fetch_letterboxd_watchlist(username: str) -> list[WatchlistEntry]:
                     letterboxd_url=f"https://letterboxd.com/film/{slug}/" if slug else "",
                 )
             )
+
+            if limit and len(entries) >= limit:
+                return entries
 
         page += 1
         time.sleep(1)  # be polite between page requests
@@ -239,12 +247,20 @@ def sync(dry_run: bool = False) -> int:
     log.info("Starting sync (dry_run=%s)", dry_run)
 
     try:
-        watchlist = fetch_letterboxd_watchlist(config["username"])
+        watchlist = fetch_letterboxd_watchlist(
+            config["username"], config["watchlist_limit"]
+        )
     except Exception as exc:  # noqa: BLE001
         log.error("Failed to fetch Letterboxd watchlist: %s", exc)
         return 1
 
-    log.info("Fetched %d films from Letterboxd watchlist", len(watchlist))
+    if config["watchlist_limit"]:
+        log.info(
+            "Fetched %d films from Letterboxd watchlist (newest %d only)",
+            len(watchlist), config["watchlist_limit"],
+        )
+    else:
+        log.info("Fetched %d films from Letterboxd watchlist", len(watchlist))
 
     account = MyPlexAccount(token=config["token"])
     state = load_state(config["state_file"])
