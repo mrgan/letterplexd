@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Sync a Letterboxd watchlist (public RSS feed) to a Plex account watchlist.
+"""Sync a Letterboxd watchlist (scraped from the public watchlist pages) to a
+Plex account watchlist.
 
 See CLAUDE.md for the full design notes.
 """
@@ -18,8 +19,8 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
-import feedparser
 import requests
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from plexapi.exceptions import BadRequest, NotFound
 from plexapi.myplex import MyPlexAccount
@@ -68,6 +69,7 @@ def load_config() -> dict:
         "log_file": BASE_DIR / os.environ.get("LOG_FILE", "logs/sync.log"),
         "unmatched_retry_days": float(os.environ.get("UNMATCHED_RETRY_DAYS", "14")),
         "match_score_threshold": float(os.environ.get("MATCH_SCORE_THRESHOLD", "0.9")),
+        "year_tolerance": int(os.environ.get("YEAR_TOLERANCE", "1")),
     }
 
 
@@ -86,43 +88,52 @@ def setup_logging(log_file: Path) -> None:
     log.addHandler(console_handler)
 
 
-def fetch_letterboxd_watchlist(username: str) -> list[WatchlistEntry]:
-    url = f"https://letterboxd.com/{username}/watchlist/rss/"
-    resp = requests.get(
-        url,
-        headers={"User-Agent": "letterboxd-plex-sync/1.0"},
-        timeout=30,
-    )
-    resp.raise_for_status()
+LETTERBOXD_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+)
 
-    feed = feedparser.parse(resp.content)
-    if feed.bozo and not feed.entries:
-        raise RuntimeError(f"Failed to parse Letterboxd RSS feed: {feed.bozo_exception}")
+
+def fetch_letterboxd_watchlist(username: str) -> list[WatchlistEntry]:
+    # Letterboxd dropped the public watchlist RSS feed; the watchlist page itself
+    # is still public, so we scrape it (paginated) instead. Its Cloudflare front
+    # only challenges non-browser clients on other routes (e.g. /film/*/json/),
+    # not this page, as long as a normal browser User-Agent is sent.
+    session = requests.Session()
+    session.headers.update({"User-Agent": LETTERBOXD_USER_AGENT})
 
     entries = []
-    for item in feed.entries:
-        title = (
-            item.get("letterboxd_filmtitle")
-            or item.get("letterboxd_filmTitle")
-            or item.get("title")
-        )
-        year_raw = item.get("letterboxd_filmyear") or item.get("letterboxd_filmYear")
-        year = None
-        if year_raw:
-            try:
-                year = int(year_raw)
-            except ValueError:
-                year = None
-        if not year:
-            # Fall back to parsing "Title (Year)" out of the plain title.
-            match = re.match(r"^(.*)\((\d{4})\)$", title.strip())
-            if match:
-                title = match.group(1).strip()
-                year = int(match.group(2))
+    page = 1
+    while True:
+        url = f"https://letterboxd.com/{username}/watchlist/page/{page}/"
+        resp = session.get(url, timeout=30)
+        resp.raise_for_status()
 
-        entries.append(
-            WatchlistEntry(title=title.strip(), year=year, letterboxd_url=item.get("link", ""))
-        )
+        soup = BeautifulSoup(resp.content, "html.parser")
+        posters = soup.select('[data-component-class="LazyPoster"]')
+        if not posters:
+            break
+
+        for poster in posters:
+            display_name = poster.get("data-item-full-display-name", "").strip()
+            slug = poster.get("data-item-slug", "")
+
+            match = re.match(r"^(.*)\s\((\d{4})\)$", display_name)
+            if match:
+                title, year = match.group(1).strip(), int(match.group(2))
+            else:
+                title, year = display_name, None
+
+            entries.append(
+                WatchlistEntry(
+                    title=title,
+                    year=year,
+                    letterboxd_url=f"https://letterboxd.com/film/{slug}/" if slug else "",
+                )
+            )
+
+        page += 1
+        time.sleep(1)  # be polite between page requests
 
     return entries
 
@@ -157,9 +168,24 @@ def title_similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
-def find_best_match(account: MyPlexAccount, entry: WatchlistEntry, score_threshold: float):
+def years_compatible(plex_year: Optional[int], entry_year: Optional[int], tolerance: int) -> bool:
+    # A year we know needs a year to confirm it against: a title match alone is
+    # not evidence, since same-titled films are exactly the case being guarded.
+    if entry_year is None:
+        return True
+    if plex_year is None:
+        return False
+    return abs(plex_year - entry_year) <= tolerance
+
+
+def find_best_match(
+    account: MyPlexAccount,
+    entry: WatchlistEntry,
+    score_threshold: float,
+    year_tolerance: int,
+):
     try:
-        results = account.search(entry.title, mediatype="movie", limit=10)
+        results = account.searchDiscover(entry.title, libtype="movie", limit=10)
     except Exception as exc:  # noqa: BLE001 - Discover search can fail in many ways
         log.warning("Plex search failed for %r: %s", entry.title, exc)
         return None
@@ -167,18 +193,39 @@ def find_best_match(account: MyPlexAccount, entry: WatchlistEntry, score_thresho
     if not results:
         return None
 
+    # Same-titled remakes are common, so a title match alone isn't enough: discard
+    # anything whose year is too far off before considering it at all. Letterboxd
+    # and Plex routinely disagree by a year on release dates, hence the tolerance.
+    candidates = [
+        r for r in results
+        if years_compatible(getattr(r, "year", None), entry.year, year_tolerance)
+    ]
+
+    if not candidates:
+        closest = min(
+            (r for r in results if getattr(r, "year", None) is not None),
+            key=lambda r: abs(r.year - entry.year) if entry.year else 0,
+            default=None,
+        )
+        if closest is not None:
+            log.info(
+                "Rejected %r (%s) on year: closest Plex result was %r (%s)",
+                entry.title, entry.year, closest.title, closest.year,
+            )
+        return None
+
     # Prefer an exact (case-insensitive) title match with matching year.
-    for r in results:
+    for r in candidates:
         if r.title.lower() == entry.title.lower() and getattr(r, "year", None) == entry.year:
             return r
 
-    # Otherwise, any exact title match regardless of year.
-    for r in results:
+    # Otherwise, an exact title match within the year tolerance.
+    for r in candidates:
         if r.title.lower() == entry.title.lower():
             return r
 
     # Otherwise, best fuzzy match above threshold.
-    best = max(results, key=lambda r: title_similarity(r.title, entry.title))
+    best = max(candidates, key=lambda r: title_similarity(r.title, entry.title))
     if title_similarity(best.title, entry.title) >= score_threshold:
         return best
 
@@ -210,7 +257,12 @@ def sync(dry_run: bool = False) -> int:
             skipped += 1
             continue
 
-        match = find_best_match(account, entry, config["match_score_threshold"])
+        match = find_best_match(
+            account,
+            entry,
+            config["match_score_threshold"],
+            config["year_tolerance"],
+        )
 
         if match is None:
             log.info("No confident match for %r (%s)", entry.title, entry.year)

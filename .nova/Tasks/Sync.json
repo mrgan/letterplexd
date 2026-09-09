@@ -1,0 +1,9 @@
+{
+  "actions" : {
+    "run" : {
+      "enabled" : true,
+      "script" : "venv/bin/python sync.py"
+    }
+  },
+  "openLogOnRun" : "start"
+}

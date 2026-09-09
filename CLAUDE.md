@@ -6,11 +6,19 @@ server's library).
 
 ## Why / approach
 
-- **Source**: Letterboxd's public per-user RSS feed
-  (`https://letterboxd.com/<username>/watchlist/rss/`). No login or API key
-  needed — this is a public, unauthenticated feed.
+- **Source**: scraped from the public per-user watchlist pages
+  (`https://letterboxd.com/<username>/watchlist/page/<n>/`). No login or API
+  key needed — the pages are public. Letterboxd removed the watchlist RSS feed
+  that this project originally relied on (it now 404s), and its Cloudflare
+  front actively challenges non-browser requests to most other routes
+  (including the per-film `/film/<slug>/json/` endpoint) — but the watchlist
+  page itself loads fine for a plain `requests` call as long as a normal
+  browser `User-Agent` is sent. Title and year are read directly from each
+  poster's `data-item-full-display-name="Title (Year)"` attribute, so no
+  per-film requests are needed. Pagination continues until a page comes back
+  with no poster entries.
 - **Destination**: Plex account watchlist, via `plexapi`'s `MyPlexAccount`.
-  Matching happens against Plex's Discover search (`account.search(...)`),
+  Matching happens against Plex's Discover search (`account.searchDiscover(...)`),
   which is server-independent — the film doesn't need to exist in any of
   your Plex libraries to be added to the watchlist.
 - **State**: a local JSON file (`state/synced.json`) tracks every film
@@ -44,7 +52,8 @@ letterboxd-plex-sync/
 | `STATE_FILE` | Path to the JSON state file (default `state/synced.json`) |
 | `LOG_FILE` | Path to the log file (default `logs/sync.log`) |
 | `UNMATCHED_RETRY_DAYS` | Days before re-attempting a previously unmatched film (default `14`) |
-| `MATCH_SCORE_THRESHOLD` | Minimum title-similarity score (0-1) to accept a fuzzy match when years don't line up (default `0.9`) |
+| `MATCH_SCORE_THRESHOLD` | Minimum title-similarity score (0-1) to accept a fuzzy match when titles don't line up exactly (default `0.9`) |
+| `YEAR_TOLERANCE` | How many years a Plex result may differ from the Letterboxd year and still be considered the same film (default `1`) |
 
 ### Getting a Plex token
 
@@ -62,27 +71,45 @@ letterboxd-plex-sync/
 
 ## Matching logic
 
-For each Letterboxd entry (title + year parsed from the RSS feed):
+For each Letterboxd entry (title + year parsed from the scraped watchlist page):
 
 1. Skip if already present (and marked matched, or unmatched within the
    retry cooldown) in the state file.
-2. Query `account.search(title, mediatype="movie")` against Plex Discover.
-3. Prefer an exact case-insensitive title match with matching year.
-4. Otherwise accept the top result if its title similarity score is above
+2. Query `account.searchDiscover(title, libtype="movie")` against Plex Discover.
+3. Discard any result whose year differs from the Letterboxd year by more than
+   `YEAR_TOLERANCE`. This filter comes first and applies to every later step —
+   a title match alone is not enough, because same-titled remakes are common
+   (`The Uninvited` 1944 vs. 2009, `Boy` 1969 vs. 2010). A Plex result with no
+   year is discarded too when the Letterboxd entry has one — a title match
+   alone isn't evidence. If Letterboxd has no year, there's nothing to filter
+   on and everything passes.
+4. Among the surviving candidates, prefer an exact case-insensitive title match
+   with an exactly matching year.
+5. Otherwise take an exact case-insensitive title match within the tolerance.
+6. Otherwise accept the best candidate if its title similarity score is above
    `MATCH_SCORE_THRESHOLD`.
-5. Otherwise mark as unmatched and log it.
-6. On a match, call `account.addToWatchlist(...)`; on failure (already on
+7. Otherwise mark as unmatched and log it — including, when everything was
+   rejected on year, the closest result Plex did return, so near-misses can be
+   eyeballed in the log.
+8. On a match, call `account.addToWatchlist(...)`; on failure (already on
    watchlist, network error, etc.) log and continue.
+
+The tolerance exists because Letterboxd and TMDb (which backs Plex Discover)
+routinely disagree by a year on release dates — festival premiere vs. general
+release. Widening it past 1 starts letting remakes back in.
 
 ## Known limitations
 
 - One-way only: removing a film from Letterboxd does not remove it from
   the Plex watchlist.
 - Matching is title/year based (Plex Discover search), not TMDb-ID based,
-  since the public RSS feed doesn't reliably expose TMDb IDs.
-- Letterboxd's public RSS only exposes what's currently on the watchlist,
-  so there's no way to distinguish "removed" from "never added" — the
-  state file only ever grows.
+  since the scraped watchlist page doesn't expose TMDb IDs.
+- The watchlist page only exposes what's currently on the watchlist, so
+  there's no way to distinguish "removed" from "never added" — the state
+  file only ever grows.
+- Relies on scraping Letterboxd's HTML (specifically the
+  `data-item-full-display-name` attribute on each poster), which could break
+  if Letterboxd changes its markup or tightens Cloudflare's bot rules further.
 
 ## Running manually
 
