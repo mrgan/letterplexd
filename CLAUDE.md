@@ -350,10 +350,6 @@ one. Ordered by what actually blocks something.
 
 ### Blocks sharing it with anyone
 
-- [ ] **Test from a clean clone** — fresh directory, new venv, empty state,
-  `.env` written from scratch, and `./notifier/build.sh` run before the first
-  sync. The only way to catch a setup step that works here purely because of
-  something already on this machine.
 - [ ] **Flip the repo public** when ready:
   `gh repo edit <owner>/letterplexd --visibility public`.
 
@@ -369,6 +365,21 @@ one. Ordered by what actually blocks something.
   See "The app icon" above, including why the compiled asset is committed.
 - [x] **Notification identity** — alerts post from `Letterplexd.app` under
   their own name and icon rather than Script Editor's.
+- [x] **Clean-clone test passes.** Cloned from GitHub (not locally, so it also
+  proves everything needed is committed), then: `install.sh` stopped at the
+  missing `.env`; a dry run worked and wrote no state; a second `install.sh`
+  built the notifier bundle from committed inputs alone — both `AppIcon.icns`
+  and `Assets.car`, both keys set — installed an agent under a test label, and
+  synced at exit 0.
+
+  The result worth keeping: the stateless clone re-attempted all 132 films and
+  added **zero**, with 113 rejected as already on the watchlist. Re-running
+  from scratch is genuinely idempotent, so a lost state file costs time rather
+  than correctness.
+
+  To repeat it, use `LETTERPLEXD_LABEL` and a long `LETTERPLEXD_INTERVAL` so
+  the test agent can't collide with the real one or fire twice, and
+  `uninstall.sh` with the same label afterwards.
 - [x] **Focus doesn't eat the heartbeat.** Tested with Do Not Disturb on, after
   notification permission was granted: the banner is suppressed, as expected,
   but the notification is still delivered to Notification Center. So Focus
