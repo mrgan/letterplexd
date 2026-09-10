@@ -300,50 +300,56 @@ Check on it with:
 launchctl print gui/$(id -u)/com.neven.letterplexd | grep -E "state =|last exit code|runs ="
 ```
 
-## TODO
-
-Most of these are code changes an assistant can make on request — they're
-listed here because each needs a decision, a design eye, or a machine that
-isn't this one.
-
-### Needs you specifically
-
-- [x] ~~**Design an app icon.**~~ Done — see "The app icon" above.
-- [ ] **Check Notification Center settings** for "Letterplexd" (System
-  Settings → Notifications). Worth doing once, deliberately: if alerts are set
-  to "none", or Focus filters them out, the monthly heartbeat is silently
-  swallowed — and a heartbeat you never see is worse than none, because
-  silence then reads as "still fine".
-- [ ] **Decide about `.nova/`.** Editor task configs are committed. Harmless,
-  but they're personal tooling, not part of the project.
-
-### Before sharing it
-
-- [ ] **Write a README.** This file is maintainer notes — it explains *why*
-  things are the way they are and assumes you already own the project. A
-  friend needs the short version: what it does, how to install it, what to put
-  in `.env`. This is the biggest gap between "works" and "shareable".
-- [ ] **Make the launchd plist portable.** It hardcodes five
-  `/Users/neven/...` paths and a `com.neven.letterplexd` label, so
-  nobody else can use it as-is. Either generate it from a template at install
-  time, or ship an `install.sh` that substitutes `$PWD` and `$USER`. This is
-  the one thing that actually blocks a friend from running this.
-- [ ] **De-personalize the docs.** "Running manually" above still opens with
-  `cd /Users/neven/Developer/letterplexd`.
-- [ ] **Note that `WATCHLIST_LIMIT` is a personal setting.** `.env` has `132`
-  because this particular watchlist had gone stale; a new user almost
-  certainly wants `0`. `.env.example` already defaults correctly, but the
-  README should say why the knob exists.
-- [ ] **Add a LICENSE** if the repo goes public.
-- [ ] **Test from a clean clone** — fresh directory, new venv, empty state
-  file, `.env` written from scratch. It's the only way to find the setup step
-  that only works here because of something already on this machine.
-- [ ] **Flip the repo to public** when ready:
-  `gh repo edit mrgan/letterplexd --visibility public`.
-
 Uninstall / stop with:
 
 ```bash
 launchctl bootout gui/$(id -u)/com.neven.letterplexd
 rm ~/Library/LaunchAgents/com.neven.letterplexd.plist
 ```
+
+## TODO
+
+Most of these are changes an assistant can make on request — they're listed
+here because each needs a decision, a design eye, or a machine that isn't this
+one. Ordered by what actually blocks something.
+
+### Blocks sharing it with anyone
+
+- [ ] **Make the launchd plist portable.** `com.neven.letterplexd.plist`
+  hardcodes five `/Users/neven/...` paths plus a `com.neven.*` label, so nobody
+  else can install it as-is. Either generate it from a template at install
+  time, or ship an `install.sh` that substitutes `$PWD` and `$USER`. This is
+  the single thing that stops a friend running this.
+- [ ] **Write a README.** This file is maintainer notes: it explains *why*
+  things are the way they are and assumes you already own the project. A friend
+  needs the short version — what it does, how to install it, what goes in
+  `.env`. Should also say why `WATCHLIST_LIMIT` exists, since `.env` here is set
+  to `132` for a stale watchlist while a new user wants the `0` default.
+- [ ] **De-personalize the docs.** "Running manually" above still opens with
+  `cd /Users/neven/Developer/letterplexd`.
+- [ ] **Test from a clean clone** — fresh directory, new venv, empty state,
+  `.env` written from scratch, and `./notifier/build.sh` run before the first
+  sync. The only way to catch a setup step that works here purely because of
+  something already on this machine.
+- [ ] **Add a LICENSE**, then flip the repo public when ready:
+  `gh repo edit mrgan/letterplexd --visibility public`.
+
+### Worth doing sometime
+
+- [ ] **Check how the heartbeat behaves under Focus.** Notifications deliver
+  correctly with the right icon, so alerts aren't disabled — but the monthly
+  heartbeat fires once and doesn't retry, so if Focus swallows it you'd hear
+  nothing for another 30 days. Silence is exactly the signal the heartbeat
+  exists to prevent, so it's worth knowing whether yours would eat one.
+- [ ] **Decide about `.nova/`.** Editor task configs are committed. Harmless,
+  but they're personal tooling rather than part of the project.
+- [ ] **Consider an `.icns`-free future.** Once pre-Tahoe support stops
+  mattering, `icon-1024.png` and the `sips`/`iconutil` half of `build.sh` can
+  go, leaving just `Assets.car`.
+
+### Done
+
+- [x] **App icon** — both `Assets.car` and `AppIcon.icns` ship in the bundle.
+  See "The app icon" above, including why the compiled asset is committed.
+- [x] **Notification identity** — alerts post from `Letterplexd.app` under
+  their own name and icon rather than Script Editor's.
