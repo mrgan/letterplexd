@@ -26,7 +26,10 @@ fi
 if [ ! -f "$DIR/.env" ]; then
 	cp "$DIR/.env.example" "$DIR/.env"
 	echo
-	echo "Created .env — fill in LETTERBOXD_USERNAME and PLEX_TOKEN, then re-run." >&2
+	echo "Created .env — fill in LETTERBOXD_USERNAME and PLEX_TOKEN." >&2
+	echo "Then preview the sync before scheduling it:" >&2
+	echo "  ./venv/bin/python sync.py --dry-run" >&2
+	echo "and re-run this script when it looks right." >&2
 	exit 1
 fi
 

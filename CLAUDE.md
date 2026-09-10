@@ -56,6 +56,7 @@ letterplexd/
   state/synced.json        # created at runtime, gitignored
   state/meta.json          # notification timing, created at runtime
   logs/sync.log            # created at runtime, gitignored
+  README.md                # user-facing; this file is the maintainer notes
   install.sh               # creates venv, builds notifier, loads the agent
   uninstall.sh             # unloads and removes the agent
   letterplexd.plist.template     # launchd template; install.sh fills it in
@@ -341,11 +342,6 @@ one. Ordered by what actually blocks something.
 
 ### Blocks sharing it with anyone
 
-- [ ] **Write a README.** This file is maintainer notes: it explains *why*
-  things are the way they are and assumes you already own the project. A friend
-  needs the short version — what it does, how to install it, what goes in
-  `.env`. Should also say why `WATCHLIST_LIMIT` exists, since `.env` here is set
-  to `132` for a stale watchlist while a new user wants the `0` default.
 - [ ] **Test from a clean clone** — fresh directory, new venv, empty state,
   `.env` written from scratch, and `./notifier/build.sh` run before the first
   sync. The only way to catch a setup step that works here purely because of
@@ -372,6 +368,10 @@ one. Ordered by what actually blocks something.
   See "The app icon" above, including why the compiled asset is committed.
 - [x] **Notification identity** — alerts post from `Letterplexd.app` under
   their own name and icon rather than Script Editor's.
+- [x] **README** — the user-facing version. This file stays the maintainer
+  notes: *why* things are as they are. `README.md` is what to do. It orders
+  setup so the dry run comes before `install.sh` schedules anything, since
+  `RunAtLoad` syncs immediately and there's no bulk undo in Plex.
 - [x] **Nothing machine-specific left in the repo** — `install.sh` generates
   the launchd plist from a template, and the label and bundle identifier are
   `com.letterplexd.*` rather than a personal domain. Verified by grepping the
