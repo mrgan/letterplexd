@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template. install.sh substitutes __LABEL__, __DIR__ and __INTERVAL__ and
+     writes the result to ~/Library/LaunchAgents/. Don't install this directly:
+     launchd needs absolute paths, so they can only be filled in on the machine
+     doing the installing. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>__LABEL__</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__DIR__/venv/bin/python3</string>
+        <string>__DIR__/sync.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__DIR__</string>
+
+    <!-- Run once at load, then every __INTERVAL__ seconds. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StartInterval</key>
+    <integer>__INTERVAL__</integer>
+
+    <key>StandardOutPath</key>
+    <string>__DIR__/logs/launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__DIR__/logs/launchd.err.log</string>
+</dict>
+</plist>

@@ -5,9 +5,13 @@ cross-server "Discover" watchlist tied to your Plex account, not a specific
 server's library).
 
 The name is **Letterplexd** throughout — the notifications, the app bundle,
-the directory, the git repo, the launchd label `com.neven.letterplexd`, and
-the notifier's bundle identifier `com.neven.letterplexd.notifier`. It was
-briefly `letterboxd-plex-sync`; if you find that slug anywhere, it's a leftover.
+the directory, the git repo, the launchd label `com.letterplexd`, and the
+notifier's bundle identifier `com.letterplexd.notifier`. It was briefly
+`letterboxd-plex-sync`; if you find that slug anywhere, it's a leftover.
+
+Nothing in the repo hardcodes a username or an absolute path. `install.sh`
+fills those in from wherever the checkout happens to live, which is what makes
+this installable by anyone.
 
 ## Why / approach
 
@@ -52,7 +56,9 @@ letterplexd/
   state/synced.json        # created at runtime, gitignored
   state/meta.json          # notification timing, created at runtime
   logs/sync.log            # created at runtime, gitignored
-  com.neven.letterplexd.plist   # launchd template
+  install.sh               # creates venv, builds notifier, loads the agent
+  uninstall.sh             # unloads and removes the agent
+  letterplexd.plist.template     # launchd template; install.sh fills it in
 ```
 
 ## Configuration (`.env`)
@@ -267,27 +273,45 @@ what macOS actually displays.
 
 ## Running manually
 
+From the checkout directory:
+
 ```bash
-cd /Users/neven/Developer/letterplexd
 python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+./venv/bin/pip install -r requirements.txt
 cp .env.example .env   # then edit .env
-python sync.py --dry-run   # preview without touching your Plex watchlist
-python sync.py             # actually sync
+./notifier/build.sh    # so notifications get the right name and icon
+./venv/bin/python sync.py --dry-run   # preview, touches nothing
+./venv/bin/python sync.py             # actually sync
 ```
 
 ## Scheduling with launchd
 
-See `com.neven.letterplexd.plist`. Install with:
-
 ```bash
-cp com.neven.letterplexd.plist ~/Library/LaunchAgents/
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.neven.letterplexd.plist
+./install.sh
 ```
 
-`RunAtLoad` means bootstrapping runs the script once immediately, which
-doubles as a check that it works under launchd's much thinner environment.
+That creates the virtualenv if needed, builds the notifier app, generates a
+plist from `letterplexd.plist.template`, and loads it. Re-running it upgrades an
+existing install rather than failing, since it boots out its own label first.
+
+launchd needs *absolute* paths, which is why the plist is generated rather than
+committed: a checked-in plist would only work for whoever created it. The
+template's `__DIR__` is filled in from the script's own location, so the repo
+itself contains no machine-specific paths.
+
+Two environment variables adjust it:
+
+| Variable | Default | Effect |
+|---|---|---|
+| `LETTERPLEXD_LABEL` | `com.letterplexd` | launchd label and plist filename; change it to run two checkouts side by side |
+| `LETTERPLEXD_INTERVAL` | `14400` (4 hours) | seconds between runs |
+
+`install.sh` refuses to load the agent when `.env` is missing or its two
+required values are blank. A scheduled job with no credentials would fail on
+every run, and the failure notification would be the first you heard of it.
+
+`RunAtLoad` means installing runs the script once immediately, which doubles as
+a check that it works under launchd's much thinner environment.
 
 Note that `logs/launchd.err.log` collects the script's *normal* output, not
 just errors: Python's `StreamHandler` defaults to stderr, so every `INFO` line
@@ -297,15 +321,17 @@ problem on its own — read it before worrying.
 Check on it with:
 
 ```bash
-launchctl print gui/$(id -u)/com.neven.letterplexd | grep -E "state =|last exit code|runs ="
+launchctl print gui/$(id -u)/com.letterplexd | grep -E "state =|last exit code|runs ="
 ```
 
 Uninstall / stop with:
 
 ```bash
-launchctl bootout gui/$(id -u)/com.neven.letterplexd
-rm ~/Library/LaunchAgents/com.neven.letterplexd.plist
+./uninstall.sh
 ```
+
+That leaves `state/` and `logs/` alone, so reinstalling resumes rather than
+re-syncing, and films already on the Plex watchlist stay there.
 
 ## TODO
 
@@ -315,24 +341,17 @@ one. Ordered by what actually blocks something.
 
 ### Blocks sharing it with anyone
 
-- [ ] **Make the launchd plist portable.** `com.neven.letterplexd.plist`
-  hardcodes five `/Users/neven/...` paths plus a `com.neven.*` label, so nobody
-  else can install it as-is. Either generate it from a template at install
-  time, or ship an `install.sh` that substitutes `$PWD` and `$USER`. This is
-  the single thing that stops a friend running this.
 - [ ] **Write a README.** This file is maintainer notes: it explains *why*
   things are the way they are and assumes you already own the project. A friend
   needs the short version — what it does, how to install it, what goes in
   `.env`. Should also say why `WATCHLIST_LIMIT` exists, since `.env` here is set
   to `132` for a stale watchlist while a new user wants the `0` default.
-- [ ] **De-personalize the docs.** "Running manually" above still opens with
-  `cd /Users/neven/Developer/letterplexd`.
 - [ ] **Test from a clean clone** — fresh directory, new venv, empty state,
   `.env` written from scratch, and `./notifier/build.sh` run before the first
   sync. The only way to catch a setup step that works here purely because of
   something already on this machine.
 - [ ] **Add a LICENSE**, then flip the repo public when ready:
-  `gh repo edit mrgan/letterplexd --visibility public`.
+  `gh repo edit <owner>/letterplexd --visibility public`.
 
 ### Worth doing sometime
 
@@ -353,3 +372,7 @@ one. Ordered by what actually blocks something.
   See "The app icon" above, including why the compiled asset is committed.
 - [x] **Notification identity** — alerts post from `Letterplexd.app` under
   their own name and icon rather than Script Editor's.
+- [x] **Nothing machine-specific left in the repo** — `install.sh` generates
+  the launchd plist from a template, and the label and bundle identifier are
+  `com.letterplexd.*` rather than a personal domain. Verified by grepping the
+  tracked files for usernames and absolute paths.
