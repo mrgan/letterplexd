@@ -4,12 +4,10 @@ One-way sync from a Letterboxd watchlist to a Plex account watchlist (the
 cross-server "Discover" watchlist tied to your Plex account, not a specific
 server's library).
 
-**Letterplexd** is the readable name — what the notifications and the app
-bundle say. The machine-facing identifiers deliberately still read
-`letterboxd-plex-sync`: the directory, the git repo, the launchd label
-`com.neven.letterboxd-plex-sync`, and the notifier's bundle identifier.
-Renaming those means reinstalling the launchd agent and renaming the repo, so
-they're left alone until there's a reason.
+The name is **Letterplexd** throughout — the notifications, the app bundle,
+the directory, the git repo, the launchd label `com.neven.letterplexd`, and
+the notifier's bundle identifier `com.neven.letterplexd.notifier`. It was
+briefly `letterboxd-plex-sync`; if you find that slug anywhere, it's a leftover.
 
 ## Why / approach
 
@@ -41,7 +39,7 @@ they're left alone until there's a reason.
 ## Layout
 
 ```
-letterboxd-plex-sync/
+letterplexd/
   sync.py                  # main script
   requirements.txt
   .env.example             # copy to .env and fill in
@@ -51,7 +49,7 @@ letterboxd-plex-sync/
   state/synced.json        # created at runtime, gitignored
   state/meta.json          # notification timing, created at runtime
   logs/sync.log            # created at runtime, gitignored
-  com.neven.letterboxd-plex-sync.plist   # launchd template
+  com.neven.letterplexd.plist   # launchd template
 ```
 
 ## Configuration (`.env`)
@@ -236,7 +234,7 @@ an `.icns` into `Contents/Resources/` and pointing `CFBundleIconFile` at it in
 ## Running manually
 
 ```bash
-cd /Users/neven/Developer/letterboxd-plex-sync
+cd /Users/neven/Developer/letterplexd
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -247,11 +245,11 @@ python sync.py             # actually sync
 
 ## Scheduling with launchd
 
-See `com.neven.letterboxd-plex-sync.plist`. Install with:
+See `com.neven.letterplexd.plist`. Install with:
 
 ```bash
-cp com.neven.letterboxd-plex-sync.plist ~/Library/LaunchAgents/
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.neven.letterboxd-plex-sync.plist
+cp com.neven.letterplexd.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.neven.letterplexd.plist
 ```
 
 `RunAtLoad` means bootstrapping runs the script once immediately, which
@@ -265,7 +263,7 @@ problem on its own — read it before worrying.
 Check on it with:
 
 ```bash
-launchctl print gui/$(id -u)/com.neven.letterboxd-plex-sync | grep -E "state =|last exit code|runs ="
+launchctl print gui/$(id -u)/com.neven.letterplexd | grep -E "state =|last exit code|runs ="
 ```
 
 ## TODO
@@ -294,12 +292,12 @@ isn't this one.
   friend needs the short version: what it does, how to install it, what to put
   in `.env`. This is the biggest gap between "works" and "shareable".
 - [ ] **Make the launchd plist portable.** It hardcodes five
-  `/Users/neven/...` paths and a `com.neven.letterboxd-plex-sync` label, so
+  `/Users/neven/...` paths and a `com.neven.letterplexd` label, so
   nobody else can use it as-is. Either generate it from a template at install
   time, or ship an `install.sh` that substitutes `$PWD` and `$USER`. This is
   the one thing that actually blocks a friend from running this.
 - [ ] **De-personalize the docs.** "Running manually" above still opens with
-  `cd /Users/neven/Developer/letterboxd-plex-sync`.
+  `cd /Users/neven/Developer/letterplexd`.
 - [ ] **Note that `WATCHLIST_LIMIT` is a personal setting.** `.env` has `132`
   because this particular watchlist had gone stale; a new user almost
   certainly wants `0`. `.env.example` already defaults correctly, but the
@@ -309,11 +307,11 @@ isn't this one.
   file, `.env` written from scratch. It's the only way to find the setup step
   that only works here because of something already on this machine.
 - [ ] **Flip the repo to public** when ready:
-  `gh repo edit mrgan/letterboxd-plex-sync --visibility public`.
+  `gh repo edit mrgan/letterplexd --visibility public`.
 
 Uninstall / stop with:
 
 ```bash
-launchctl bootout gui/$(id -u)/com.neven.letterboxd-plex-sync
-rm ~/Library/LaunchAgents/com.neven.letterboxd-plex-sync.plist
+launchctl bootout gui/$(id -u)/com.neven.letterplexd
+rm ~/Library/LaunchAgents/com.neven.letterplexd.plist
 ```

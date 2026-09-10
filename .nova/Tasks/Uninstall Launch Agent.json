@@ -2,7 +2,7 @@
   "actions" : {
     "build" : {
       "enabled" : true,
-      "script" : "launchctl bootout gui/$(id -u)/com.neven.letterboxd-plex-sync; rm ~/Library/LaunchAgents/com.neven.letterboxd-plex-sync.plist"
+      "script" : "launchctl bootout gui/$(id -u)/com.neven.letterplexd; rm ~/Library/LaunchAgents/com.neven.letterplexd.plist"
     }
   }
 }

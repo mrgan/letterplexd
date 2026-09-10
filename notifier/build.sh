@@ -15,7 +15,7 @@ osacompile -o "$APP" notifier.applescript
 # be ours rather than osacompile's defaults.
 defaults write "$(pwd)/$PLIST" CFBundleName "Letterplexd"
 defaults write "$(pwd)/$PLIST" CFBundleDisplayName "Letterplexd"
-defaults write "$(pwd)/$PLIST" CFBundleIdentifier "com.neven.letterboxd-plex-sync.notifier"
+defaults write "$(pwd)/$PLIST" CFBundleIdentifier "com.neven.letterplexd.notifier"
 defaults write "$(pwd)/$PLIST" LSUIElement -bool true
 plutil -convert xml1 "$PLIST"
 

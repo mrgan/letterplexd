@@ -4,16 +4,16 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.neven.letterboxd-plex-sync</string>
+    <string>com.neven.letterplexd</string>
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/neven/Developer/letterboxd-plex-sync/venv/bin/python3</string>
-        <string>/Users/neven/Developer/letterboxd-plex-sync/sync.py</string>
+        <string>/Users/neven/Developer/letterplexd/venv/bin/python3</string>
+        <string>/Users/neven/Developer/letterplexd/sync.py</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/neven/Developer/letterboxd-plex-sync</string>
+    <string>/Users/neven/Developer/letterplexd</string>
 
     <!-- Run once at load, then every 14400 seconds (4 hours). -->
     <key>RunAtLoad</key>
@@ -22,8 +22,8 @@
     <integer>14400</integer>
 
     <key>StandardOutPath</key>
-    <string>/Users/neven/Developer/letterboxd-plex-sync/logs/launchd.out.log</string>
+    <string>/Users/neven/Developer/letterplexd/logs/launchd.out.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/neven/Developer/letterboxd-plex-sync/logs/launchd.err.log</string>
+    <string>/Users/neven/Developer/letterplexd/logs/launchd.err.log</string>
 </dict>
 </plist>

@@ -5,3 +5,5 @@ logs/
 __pycache__/
 *.pyc
 notifier/*.app
+.DS_Store
+design/

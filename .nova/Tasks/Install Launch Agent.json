@@ -2,7 +2,7 @@
   "actions" : {
     "build" : {
       "enabled" : true,
-      "script" : "cp com.neven.letterboxd-plex-sync.plist ~/Library/LaunchAgents/ && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.neven.letterboxd-plex-sync.plist"
+      "script" : "cp com.neven.letterplexd.plist ~/Library/LaunchAgents/ && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.neven.letterplexd.plist"
     }
   }
 }

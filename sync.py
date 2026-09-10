@@ -28,7 +28,7 @@ from plexapi.myplex import MyPlexAccount
 
 BASE_DIR = Path(__file__).resolve().parent
 
-log = logging.getLogger("letterboxd_plex_sync")
+log = logging.getLogger("letterplexd")
 
 
 @dataclass
@@ -174,33 +174,36 @@ NOTIFIER_APP = BASE_DIR / "notifier" / "Letterplexd.app" / "Contents" / "MacOS" 
 notifications_enabled = True
 
 
-def notify(subtitle: str, message: str) -> None:
+def notify(headline: str, message: str) -> None:
     # This runs unattended for months, so it has to be able to speak up: on new
     # films, on failure, and on a slow heartbeat. See CLAUDE.md "Staying aware
     # of it". A notification failing must never take a sync down with it.
     if not notifications_enabled:
         return
 
-    env = {
-        **os.environ,
-        "LPS_TITLE": NOTIFY_TITLE,
-        "LPS_SUBTITLE": subtitle,
-        "LPS_MESSAGE": message,
-    }
-
     try:
         if NOTIFIER_APP.exists():
             # Notifications inherit the posting process's bundle identity, so
-            # going through our own app makes them read as "Letterplexd"
-            # rather than "Script Editor".
+            # going through our own app makes them read as "Letterplexd" rather
+            # than "Script Editor". macOS already prints that name above the
+            # alert, so the headline goes in the title and the subtitle is left
+            # empty rather than repeating the name back.
+            env = {
+                **os.environ,
+                "LPS_TITLE": headline,
+                "LPS_SUBTITLE": "",
+                "LPS_MESSAGE": message,
+            }
             subprocess.run([str(NOTIFIER_APP)], env=env, capture_output=True, timeout=10)
         else:
-            # Unbuilt bundle shouldn't cost us the notification entirely.
+            # Unbuilt bundle shouldn't cost us the notification entirely. Here
+            # the alert wears Script Editor's name, so the title has to carry
+            # ours and the headline drops to the subtitle.
             log.warning("Notifier app not built; falling back to osascript")
             script = (
                 f'display notification {applescript_string(message)} '
                 f'with title {applescript_string(NOTIFY_TITLE)} '
-                f'subtitle {applescript_string(subtitle)}'
+                f'subtitle {applescript_string(headline)}'
             )
             subprocess.run(["osascript", "-e", script], capture_output=True, timeout=10)
     except Exception as exc:  # noqa: BLE001
