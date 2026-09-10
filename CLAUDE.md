@@ -197,6 +197,18 @@ environment variables rather than being interpolated into an AppleScript
 string, which sidesteps quoting bugs on film titles containing apostrophes or
 quotes.
 
+That introduces an encoding trap worth knowing about, because it is silent and
+looks like a font problem. AppleScript's `system attribute` decodes the
+environment as **Mac OS Roman**, not UTF-8, so anything non-ASCII arrives
+mangled: `→` renders as `,Üí`, `·` as `¬∑`, and *La cérémonie* as
+*La c√©r√©monie*. The applet therefore reads each variable back through
+`do shell script "printf '%s' \"$VAR\""`, which returns real UTF-8. Since the
+shell does not re-expand an expanded value, titles containing `$` or backticks
+(*Ca$h*, or the 1971 film literally titled *$*) stay literal.
+
+If notifications ever start showing `√` and `Ü` sequences, this is the cause —
+check `utf8Env` in `notifier.applescript` rather than the sending side.
+
 The bundle has no custom icon, so it inherits the generic applet one. Dropping
 an `.icns` into `Contents/Resources/` and pointing `CFBundleIconFile` at it in
 `build.sh` would fix that.

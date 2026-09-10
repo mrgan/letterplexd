@@ -4,9 +4,9 @@
 -- See CLAUDE.md "Staying aware of it" for how to build this.
 
 on run
-	set theTitle to system attribute "LPS_TITLE"
-	set theSubtitle to system attribute "LPS_SUBTITLE"
-	set theMessage to system attribute "LPS_MESSAGE"
+	set theTitle to utf8Env("LPS_TITLE")
+	set theSubtitle to utf8Env("LPS_SUBTITLE")
+	set theMessage to utf8Env("LPS_MESSAGE")
 
 	if theTitle is "" then set theTitle to "Letterboxd Sync"
 
@@ -16,3 +16,11 @@ on run
 		display notification theMessage with title theTitle subtitle theSubtitle
 	end if
 end run
+
+-- `system attribute` decodes the environment as Mac OS Roman, which turns any
+-- non-ASCII into mojibake: an arrow becomes ",Üí", and a film title like
+-- "La cérémonie" becomes "La c√©r√©monie". Reading the value back out through
+-- the shell returns it as the UTF-8 it actually is.
+on utf8Env(varName)
+	return do shell script "printf '%s' \"$" & varName & "\""
+end utf8Env
