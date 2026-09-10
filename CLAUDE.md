@@ -346,7 +346,7 @@ one. Ordered by what actually blocks something.
   `.env` written from scratch, and `./notifier/build.sh` run before the first
   sync. The only way to catch a setup step that works here purely because of
   something already on this machine.
-- [ ] **Add a LICENSE**, then flip the repo public when ready:
+- [ ] **Flip the repo public** when ready:
   `gh repo edit <owner>/letterplexd --visibility public`.
 
 ### Worth doing sometime
@@ -368,6 +368,11 @@ one. Ordered by what actually blocks something.
   See "The app icon" above, including why the compiled asset is committed.
 - [x] **Notification identity** — alerts post from `Letterplexd.app` under
   their own name and icon rather than Script Editor's.
+- [x] **License** — 0BSD: permissive with no attribution requirement, which is
+  as free as a real software license gets. Deliberately not CC0 or a bare
+  public-domain dedication: the warranty disclaimer is worth keeping even when
+  you don't want to own anything, since it's about liability rather than
+  ownership.
 - [x] **README** — the user-facing version. This file stays the maintainer
   notes: *why* things are as they are. `README.md` is what to do. It orders
   setup so the dry run comes before `install.sh` schedules anything, since

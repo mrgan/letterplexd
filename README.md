@@ -99,3 +99,7 @@ your sync history is kept, so reinstalling resumes rather than starting over.
   rather than silently doing nothing.
 
 `CLAUDE.md` has the design notes and the reasoning behind all of the above.
+
+## License
+
+[0BSD](LICENSE). Do whatever you like with it — no attribution needed.
