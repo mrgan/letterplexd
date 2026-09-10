@@ -356,8 +356,15 @@ one. Ordered by what actually blocks something.
   heartbeat fires once and doesn't retry, so if Focus swallows it you'd hear
   nothing for another 30 days. Silence is exactly the signal the heartbeat
   exists to prevent, so it's worth knowing whether yours would eat one.
-- [ ] **Decide about `.nova/`.** Editor task configs are committed. Harmless,
-  but they're personal tooling rather than part of the project.
+
+  Focus can't be detected from a script — `~/Library/DoNotDisturb/DB/` is
+  TCC-protected, and granting Full Disk Access to Python for a watchlist
+  syncer isn't a trade worth making. So this has to be tested by hand: turn on
+  Do Not Disturb, post a notification, and check whether it still reaches
+  Notification Center. If it does, nothing needs fixing — the heartbeat is
+  delayed, not lost. If it vanishes entirely, the cheap fix is posting the
+  heartbeat on two consecutive runs four hours apart, so one Focus window
+  can't eat both.
 - [ ] **Consider an `.icns`-free future.** Once pre-Tahoe support stops
   mattering, `icon-1024.png` and the `sips`/`iconutil` half of `build.sh` can
   go, leaving just `Assets.car`.
@@ -368,6 +375,9 @@ one. Ordered by what actually blocks something.
   See "The app icon" above, including why the compiled asset is committed.
 - [x] **Notification identity** — alerts post from `Letterplexd.app` under
   their own name and icon rather than Script Editor's.
+- [x] **`.nova/` stays committed.** Small, harmless, and useful to anyone else
+  who opens this in Nova. The tasks call `./install.sh` and `./uninstall.sh`,
+  so they contain nothing machine-specific.
 - [x] **License** — 0BSD: permissive with no attribution requirement, which is
   as free as a real software license gets. Deliberately not CC0 or a bare
   public-domain dedication: the warranty disclaimer is worth keeping even when
