@@ -359,20 +359,6 @@ one. Ordered by what actually blocks something.
 
 ### Worth doing sometime
 
-- [ ] **Check how the heartbeat behaves under Focus.** Notifications deliver
-  correctly with the right icon, so alerts aren't disabled — but the monthly
-  heartbeat fires once and doesn't retry, so if Focus swallows it you'd hear
-  nothing for another 30 days. Silence is exactly the signal the heartbeat
-  exists to prevent, so it's worth knowing whether yours would eat one.
-
-  Focus can't be detected from a script — `~/Library/DoNotDisturb/DB/` is
-  TCC-protected, and granting Full Disk Access to Python for a watchlist
-  syncer isn't a trade worth making. So this has to be tested by hand: turn on
-  Do Not Disturb, post a notification, and check whether it still reaches
-  Notification Center. If it does, nothing needs fixing — the heartbeat is
-  delayed, not lost. If it vanishes entirely, the cheap fix is posting the
-  heartbeat on two consecutive runs four hours apart, so one Focus window
-  can't eat both.
 - [ ] **Consider an `.icns`-free future.** Once pre-Tahoe support stops
   mattering, `icon-1024.png` and the `sips`/`iconutil` half of `build.sh` can
   go, leaving just `Assets.car`.
@@ -383,6 +369,16 @@ one. Ordered by what actually blocks something.
   See "The app icon" above, including why the compiled asset is committed.
 - [x] **Notification identity** — alerts post from `Letterplexd.app` under
   their own name and icon rather than Script Editor's.
+- [x] **Focus doesn't eat the heartbeat.** Tested with Do Not Disturb on, after
+  notification permission was granted: the banner is suppressed, as expected,
+  but the notification is still delivered to Notification Center. So Focus
+  delays the heartbeat until you next look, it doesn't drop it — no mitigation
+  needed. Worth re-checking only if the notification style is ever set to
+  "None", which would suppress delivery outright.
+
+  Focus itself can't be detected from a script: `~/Library/DoNotDisturb/DB/` is
+  TCC-protected, and granting Full Disk Access to Python for a watchlist syncer
+  isn't a trade worth making. Re-test by hand if this ever comes into question.
 - [x] **`.nova/` stays committed.** Small, harmless, and useful to anyone else
   who opens this in Nova. The tasks call `./install.sh` and `./uninstall.sh`,
   so they contain nothing machine-specific.
