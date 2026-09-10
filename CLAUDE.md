@@ -344,14 +344,9 @@ re-syncing, and films already on the Plex watchlist stay there.
 
 ## TODO
 
-Most of these are changes an assistant can make on request — they're listed
-here because each needs a decision, a design eye, or a machine that isn't this
-one. Ordered by what actually blocks something.
-
-### Blocks sharing it with anyone
-
-- [ ] **Set a GitHub description and topics.** The repo is public with an empty
-  description, which is what shows in search results and on the profile.
+Nothing here blocks anything — the project is installed, running, documented
+and public. What's left is optional, and the Done list below records decisions
+worth not re-litigating.
 
 ### Worth doing sometime
 
@@ -365,9 +360,10 @@ one. Ordered by what actually blocks something.
   See "The app icon" above, including why the compiled asset is committed.
 - [x] **Notification identity** — alerts post from `Letterplexd.app` under
   their own name and icon rather than Script Editor's.
-- [x] **Repo is public**, under 0BSD. Verified before it went out: `.env` was
-  never committed, the Plex token appears in no commit, and a credential-shaped
-  string scan across all of history is empty.
+- [x] **Repo is public**, under 0BSD, with a description and topics
+  (`letterboxd`, `plex`, `macos`, `launchd`, `plexapi`). Verified before it
+  went out: `.env` was never committed, the Plex token appears in no commit,
+  and a credential-shaped string scan across all of history is empty.
 - [x] **Clean-clone test passes.** Cloned from GitHub (not locally, so it also
   proves everything needed is committed), then: `install.sh` stopped at the
   missing `.env`; a dry run worked and wrote no state; a second `install.sh`
