@@ -186,6 +186,14 @@ remembering it was launchd or hunting through `~/Library/LaunchAgents`.
 
 Notifications are suppressed under `--dry-run`.
 
+An app's *first* notification is also its macOS permission prompt, which is a
+trap for something that runs unattended: left alone, the prompt would appear
+whenever the first real notification fired — possibly a failure alert nobody
+was present to allow, or the heartbeat 30 days later. `install.sh` therefore
+posts a confirmation notification at the end of a successful install, so the
+prompt happens while someone is watching the screen. Note that changing
+`CFBundleIdentifier` makes macOS treat the app as new and ask again.
+
 ### Why there's an app bundle
 
 macOS attributes a notification to the bundle of the process that posts it, so

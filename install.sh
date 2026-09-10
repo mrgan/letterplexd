@@ -59,8 +59,19 @@ plutil -lint "$PLIST" > /dev/null
 launchctl bootout "gui/$(id -u)/$LABEL" 2> /dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
 
+# An app's first notification doubles as its permission prompt. Post one now,
+# while somebody is watching the screen, rather than discovering 30 days from
+# now that the heartbeat was the prompt and nobody was there to allow it.
+if [ -x "$DIR/notifier/Letterplexd.app/Contents/MacOS/applet" ]; then
+	LPS_TITLE="Letterplexd is installed" \
+	LPS_SUBTITLE="" \
+	LPS_MESSAGE="Allow notifications, so failures and the monthly check-in reach you." \
+		"$DIR/notifier/Letterplexd.app/Contents/MacOS/applet" || true
+fi
+
 echo
 echo "Installed $LABEL — syncing every $((INTERVAL / 60)) minutes."
+echo "Allow notifications if macOS just asked — that prompt only appears once."
 echo "RunAtLoad means it is running once now; watch it with:"
 echo "  tail -f \"$DIR/logs/sync.log\""
 echo
