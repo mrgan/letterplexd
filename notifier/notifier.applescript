@@ -1,5 +1,5 @@
 -- Posts a macOS notification under this app bundle's own identity, so alerts
--- read as "Letterboxd Sync" instead of "Script Editor" (osascript's default).
+-- read as "Letterplexd" instead of "Script Editor" (osascript's default).
 -- Text arrives via the environment to avoid quoting the values into a script.
 -- See CLAUDE.md "Staying aware of it" for how to build this.
 
@@ -8,7 +8,7 @@ on run
 	set theSubtitle to utf8Env("LPS_SUBTITLE")
 	set theMessage to utf8Env("LPS_MESSAGE")
 
-	if theTitle is "" then set theTitle to "Letterboxd Sync"
+	if theTitle is "" then set theTitle to "Letterplexd"
 
 	if theSubtitle is "" then
 		display notification theMessage with title theTitle

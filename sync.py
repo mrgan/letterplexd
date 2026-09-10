@@ -169,8 +169,8 @@ def save_json(path: Path, data: dict) -> None:
     tmp.replace(path)
 
 
-NOTIFY_TITLE = "Letterboxd → Plex"
-NOTIFIER_APP = BASE_DIR / "notifier" / "Letterboxd Sync.app" / "Contents" / "MacOS" / "applet"
+NOTIFY_TITLE = "Letterplexd"
+NOTIFIER_APP = BASE_DIR / "notifier" / "Letterplexd.app" / "Contents" / "MacOS" / "applet"
 notifications_enabled = True
 
 
@@ -191,7 +191,7 @@ def notify(subtitle: str, message: str) -> None:
     try:
         if NOTIFIER_APP.exists():
             # Notifications inherit the posting process's bundle identity, so
-            # going through our own app makes them read as "Letterboxd Sync"
+            # going through our own app makes them read as "Letterplexd"
             # rather than "Script Editor".
             subprocess.run([str(NOTIFIER_APP)], env=env, capture_output=True, timeout=10)
         else:

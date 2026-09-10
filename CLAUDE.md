@@ -1,8 +1,15 @@
-# letterboxd-plex-sync
+# Letterplexd
 
 One-way sync from a Letterboxd watchlist to a Plex account watchlist (the
 cross-server "Discover" watchlist tied to your Plex account, not a specific
 server's library).
+
+**Letterplexd** is the readable name — what the notifications and the app
+bundle say. The machine-facing identifiers deliberately still read
+`letterboxd-plex-sync`: the directory, the git repo, the launchd label
+`com.neven.letterboxd-plex-sync`, and the notifier's bundle identifier.
+Renaming those means reinstalling the launchd agent and renaming the repo, so
+they're left alone until there's a reason.
 
 ## Why / approach
 
@@ -177,7 +184,7 @@ macOS attributes a notification to the bundle of the process that posts it, so
 a plain `osascript` call shows up as **Script Editor** with Script Editor's
 icon — an app you didn't run, named above an alert meant to explain itself
 months later. `notifier/` solves that: a tiny AppleScript applet compiled into
-`Letterboxd Sync.app`, whose `Info.plist` carries our own bundle name and
+`Letterplexd.app`, whose `Info.plist` carries our own bundle name and
 identifier. `sync.py` runs its `Contents/MacOS/applet` directly, so the
 notification inherits *that* identity.
 
@@ -272,7 +279,7 @@ isn't this one.
 - [ ] **Design an app icon.** The notifier bundle inherits `osacompile`'s
   generic applet icon. Save an `.icns` as `notifier/icon.icns`; wiring
   `CFBundleIconFile` into `build.sh` is a one-line follow-up.
-- [ ] **Check Notification Center settings** for "Letterboxd Sync" (System
+- [ ] **Check Notification Center settings** for "Letterplexd" (System
   Settings → Notifications). Worth doing once, deliberately: if alerts are set
   to "none", or Focus filters them out, the monthly heartbeat is silently
   swallowed — and a heartbeat you never see is worse than none, because
