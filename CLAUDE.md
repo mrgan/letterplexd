@@ -261,6 +261,49 @@ Check on it with:
 launchctl print gui/$(id -u)/com.neven.letterboxd-plex-sync | grep -E "state =|last exit code|runs ="
 ```
 
+## TODO
+
+Most of these are code changes an assistant can make on request — they're
+listed here because each needs a decision, a design eye, or a machine that
+isn't this one.
+
+### Needs you specifically
+
+- [ ] **Design an app icon.** The notifier bundle inherits `osacompile`'s
+  generic applet icon. Save an `.icns` as `notifier/icon.icns`; wiring
+  `CFBundleIconFile` into `build.sh` is a one-line follow-up.
+- [ ] **Check Notification Center settings** for "Letterboxd Sync" (System
+  Settings → Notifications). Worth doing once, deliberately: if alerts are set
+  to "none", or Focus filters them out, the monthly heartbeat is silently
+  swallowed — and a heartbeat you never see is worse than none, because
+  silence then reads as "still fine".
+- [ ] **Decide about `.nova/`.** Editor task configs are committed. Harmless,
+  but they're personal tooling, not part of the project.
+
+### Before sharing it
+
+- [ ] **Write a README.** This file is maintainer notes — it explains *why*
+  things are the way they are and assumes you already own the project. A
+  friend needs the short version: what it does, how to install it, what to put
+  in `.env`. This is the biggest gap between "works" and "shareable".
+- [ ] **Make the launchd plist portable.** It hardcodes five
+  `/Users/neven/...` paths and a `com.neven.letterboxd-plex-sync` label, so
+  nobody else can use it as-is. Either generate it from a template at install
+  time, or ship an `install.sh` that substitutes `$PWD` and `$USER`. This is
+  the one thing that actually blocks a friend from running this.
+- [ ] **De-personalize the docs.** "Running manually" above still opens with
+  `cd /Users/neven/Developer/letterboxd-plex-sync`.
+- [ ] **Note that `WATCHLIST_LIMIT` is a personal setting.** `.env` has `132`
+  because this particular watchlist had gone stale; a new user almost
+  certainly wants `0`. `.env.example` already defaults correctly, but the
+  README should say why the knob exists.
+- [ ] **Add a LICENSE** if the repo goes public.
+- [ ] **Test from a clean clone** — fresh directory, new venv, empty state
+  file, `.env` written from scratch. It's the only way to find the setup step
+  that only works here because of something already on this machine.
+- [ ] **Flip the repo to public** when ready:
+  `gh repo edit mrgan/letterboxd-plex-sync --visibility public`.
+
 Uninstall / stop with:
 
 ```bash
