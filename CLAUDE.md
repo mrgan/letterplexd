@@ -350,8 +350,8 @@ one. Ordered by what actually blocks something.
 
 ### Blocks sharing it with anyone
 
-- [ ] **Flip the repo public** when ready:
-  `gh repo edit <owner>/letterplexd --visibility public`.
+- [ ] **Set a GitHub description and topics.** The repo is public with an empty
+  description, which is what shows in search results and on the profile.
 
 ### Worth doing sometime
 
@@ -365,6 +365,9 @@ one. Ordered by what actually blocks something.
   See "The app icon" above, including why the compiled asset is committed.
 - [x] **Notification identity** — alerts post from `Letterplexd.app` under
   their own name and icon rather than Script Editor's.
+- [x] **Repo is public**, under 0BSD. Verified before it went out: `.env` was
+  never committed, the Plex token appears in no commit, and a credential-shaped
+  string scan across all of history is empty.
 - [x] **Clean-clone test passes.** Cloned from GitHub (not locally, so it also
   proves everything needed is committed), then: `install.sh` stopped at the
   missing `.env`; a dry run worked and wrote no state; a second `install.sh`

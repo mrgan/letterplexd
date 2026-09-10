@@ -15,7 +15,7 @@ instructions are included below).
 ## Setup
 
 ```bash
-git clone <repo-url> letterplexd
+git clone https://github.com/mrgan/letterplexd.git
 cd letterplexd
 ./install.sh
 ```
