@@ -33,6 +33,11 @@ this installable by anyone.
 - **State**: a local JSON file (`state/synced.json`) tracks every film
   already processed (matched or not), keyed by a normalized
   `title (year)` string, so re-runs only touch new watchlist entries.
+  The state file is an optimisation, not a correctness requirement: verified by
+  syncing from a fresh clone with no state at all, which re-attempted all 132
+  films and added **zero** — Plex rejects each one as already on the watchlist
+  and `sync.py` records that as matched. So losing the state file costs a
+  minute of API calls, not a mangled watchlist.
 - **Failure mode**: unmatched/ambiguous films are logged and recorded as
   "unmatched" in the state file (with a retry cooldown), never raise —
   one bad match can't crash the run.
@@ -183,6 +188,16 @@ everything else.
 The heartbeat naming the project directory is deliberate: months from now the
 notification itself should be enough to find and stop this thing, without
 remembering it was launchd or hunting through `~/Library/LaunchAgents`.
+
+Because the heartbeat fires once and never retries, it matters whether Focus
+can swallow it. Tested with Do Not Disturb on: the banner is suppressed, as
+expected, but the notification still reaches Notification Center. So Focus
+delays the heartbeat until you next look rather than dropping it, and no
+retry logic is needed. The one setting that *would* break it is a notification
+style of "None", which suppresses delivery outright. Focus can't be detected
+from a script either — `~/Library/DoNotDisturb/DB/` is TCC-protected, and
+granting Full Disk Access to Python for a watchlist syncer isn't a trade worth
+making — so re-test by hand if this ever comes into question.
 
 Notifications are suppressed under `--dry-run`.
 
@@ -345,63 +360,9 @@ re-syncing, and films already on the Plex watchlist stay there.
 ## TODO
 
 Nothing here blocks anything — the project is installed, running, documented
-and public. What's left is optional, and the Done list below records decisions
-worth not re-litigating.
-
-### Worth doing sometime
+and public. Completed work isn't listed; the reasoning behind each decision
+lives in the section it belongs to, and git history has the rest.
 
 - [ ] **Consider an `.icns`-free future.** Once pre-Tahoe support stops
   mattering, `icon-1024.png` and the `sips`/`iconutil` half of `build.sh` can
   go, leaving just `Assets.car`.
-
-### Done
-
-- [x] **App icon** — both `Assets.car` and `AppIcon.icns` ship in the bundle.
-  See "The app icon" above, including why the compiled asset is committed.
-- [x] **Notification identity** — alerts post from `Letterplexd.app` under
-  their own name and icon rather than Script Editor's.
-- [x] **Repo is public**, under 0BSD, with a description and topics
-  (`letterboxd`, `plex`, `macos`, `launchd`, `plexapi`). Verified before it
-  went out: `.env` was never committed, the Plex token appears in no commit,
-  and a credential-shaped string scan across all of history is empty.
-- [x] **Clean-clone test passes.** Cloned from GitHub (not locally, so it also
-  proves everything needed is committed), then: `install.sh` stopped at the
-  missing `.env`; a dry run worked and wrote no state; a second `install.sh`
-  built the notifier bundle from committed inputs alone — both `AppIcon.icns`
-  and `Assets.car`, both keys set — installed an agent under a test label, and
-  synced at exit 0.
-
-  The result worth keeping: the stateless clone re-attempted all 132 films and
-  added **zero**, with 113 rejected as already on the watchlist. Re-running
-  from scratch is genuinely idempotent, so a lost state file costs time rather
-  than correctness.
-
-  To repeat it, use `LETTERPLEXD_LABEL` and a long `LETTERPLEXD_INTERVAL` so
-  the test agent can't collide with the real one or fire twice, and
-  `uninstall.sh` with the same label afterwards.
-- [x] **Focus doesn't eat the heartbeat.** Tested with Do Not Disturb on, after
-  notification permission was granted: the banner is suppressed, as expected,
-  but the notification is still delivered to Notification Center. So Focus
-  delays the heartbeat until you next look, it doesn't drop it — no mitigation
-  needed. Worth re-checking only if the notification style is ever set to
-  "None", which would suppress delivery outright.
-
-  Focus itself can't be detected from a script: `~/Library/DoNotDisturb/DB/` is
-  TCC-protected, and granting Full Disk Access to Python for a watchlist syncer
-  isn't a trade worth making. Re-test by hand if this ever comes into question.
-- [x] **`.nova/` stays committed.** Small, harmless, and useful to anyone else
-  who opens this in Nova. The tasks call `./install.sh` and `./uninstall.sh`,
-  so they contain nothing machine-specific.
-- [x] **License** — 0BSD: permissive with no attribution requirement, which is
-  as free as a real software license gets. Deliberately not CC0 or a bare
-  public-domain dedication: the warranty disclaimer is worth keeping even when
-  you don't want to own anything, since it's about liability rather than
-  ownership.
-- [x] **README** — the user-facing version. This file stays the maintainer
-  notes: *why* things are as they are. `README.md` is what to do. It orders
-  setup so the dry run comes before `install.sh` schedules anything, since
-  `RunAtLoad` syncs immediately and there's no bulk undo in Plex.
-- [x] **Nothing machine-specific left in the repo** — `install.sh` generates
-  the launchd plist from a template, and the label and bundle identifier are
-  `com.letterplexd.*` rather than a personal domain. Verified by grepping the
-  tracked files for usernames and absolute paths.
