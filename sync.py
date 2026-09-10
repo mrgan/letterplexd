@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import subprocess
 import sys
 import time
 from dataclasses import dataclass, asdict
@@ -71,6 +72,9 @@ def load_config() -> dict:
         "match_score_threshold": float(os.environ.get("MATCH_SCORE_THRESHOLD", "0.9")),
         "year_tolerance": int(os.environ.get("YEAR_TOLERANCE", "1")),
         "watchlist_limit": int(os.environ.get("WATCHLIST_LIMIT", "0")),
+        "meta_file": BASE_DIR / os.environ.get("META_FILE", "state/meta.json"),
+        "notify": os.environ.get("NOTIFY", "1") not in ("0", "false", "no"),
+        "heartbeat_days": float(os.environ.get("HEARTBEAT_DAYS", "30")),
     }
 
 
@@ -146,19 +150,55 @@ def fetch_letterboxd_watchlist(username: str, limit: int = 0) -> list[WatchlistE
     return entries
 
 
-def load_state(state_file: Path) -> dict:
-    if not state_file.exists():
+def load_json(path: Path) -> dict:
+    if not path.exists():
         return {}
-    with state_file.open("r") as f:
-        return json.load(f)
+    try:
+        with path.open("r") as f:
+            return json.load(f)
+    except ValueError as exc:
+        log.warning("Ignoring unreadable %s: %s", path.name, exc)
+        return {}
 
 
-def save_state(state_file: Path, state: dict) -> None:
-    state_file.parent.mkdir(parents=True, exist_ok=True)
-    tmp = state_file.with_suffix(".tmp")
+def save_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
     with tmp.open("w") as f:
-        json.dump(state, f, indent=2, sort_keys=True)
-    tmp.replace(state_file)
+        json.dump(data, f, indent=2, sort_keys=True)
+    tmp.replace(path)
+
+
+NOTIFY_TITLE = "Letterboxd → Plex"
+notifications_enabled = True
+
+
+def notify(subtitle: str, message: str) -> None:
+    # This runs unattended for months, so it has to be able to speak up: on new
+    # films, on failure, and on a slow heartbeat. See CLAUDE.md "Staying aware
+    # of it". A notification failing must never take a sync down with it.
+    if not notifications_enabled:
+        return
+
+    def escape(text: str) -> str:
+        return text.replace("\\", "\\\\").replace('"', '\\"')
+
+    script = (
+        f'display notification "{escape(message)}" '
+        f'with title "{escape(NOTIFY_TITLE)}" '
+        f'subtitle "{escape(subtitle)}"'
+    )
+    try:
+        subprocess.run(["osascript", "-e", script], capture_output=True, timeout=10)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Could not post notification: %s", exc)
+
+
+def home_relative(path: Path) -> str:
+    try:
+        return f"~/{path.relative_to(Path.home())}"
+    except ValueError:
+        return str(path)
 
 
 def should_skip(entry_state: Optional[dict], unmatched_retry_days: float) -> bool:
@@ -241,10 +281,15 @@ def find_best_match(
 
 
 def sync(dry_run: bool = False) -> int:
+    global notifications_enabled
+
     config = load_config()
     setup_logging(config["log_file"])
+    notifications_enabled = config["notify"] and not dry_run
 
     log.info("Starting sync (dry_run=%s)", dry_run)
+
+    meta = load_json(config["meta_file"])
 
     try:
         watchlist = fetch_letterboxd_watchlist(
@@ -252,6 +297,20 @@ def sync(dry_run: bool = False) -> int:
         )
     except Exception as exc:  # noqa: BLE001
         log.error("Failed to fetch Letterboxd watchlist: %s", exc)
+        report_failure(config, meta, f"Couldn't reach Letterboxd: {exc}", dry_run)
+        return 1
+
+    # An empty scrape is the shape a Letterboxd markup change takes: no posters
+    # match, so the fetch returns nothing and the run would otherwise "succeed"
+    # having done nothing at all. Treat it as the failure it almost certainly is.
+    if not watchlist:
+        log.error(
+            "Letterboxd returned no films — the page markup may have changed, "
+            "or the watchlist is genuinely empty"
+        )
+        report_failure(
+            config, meta, "Letterboxd returned no films; the scraper may need updating", dry_run
+        )
         return 1
 
     if config["watchlist_limit"]:
@@ -262,10 +321,17 @@ def sync(dry_run: bool = False) -> int:
     else:
         log.info("Fetched %d films from Letterboxd watchlist", len(watchlist))
 
-    account = MyPlexAccount(token=config["token"])
-    state = load_state(config["state_file"])
+    try:
+        account = MyPlexAccount(token=config["token"])
+    except Exception as exc:  # noqa: BLE001 - an expired token surfaces here
+        log.error("Could not sign in to Plex: %s", exc)
+        report_failure(config, meta, f"Plex sign-in failed: {exc}", dry_run)
+        return 1
+
+    state = load_json(config["state_file"])
 
     matched = skipped = unmatched = failed = 0
+    added_titles = []
 
     for entry in watchlist:
         key = entry.key
@@ -315,6 +381,7 @@ def sync(dry_run: bool = False) -> int:
                 "synced_at": time.time(),
             }
             matched += 1
+            added_titles.append(entry.title)
         except (BadRequest, NotFound) as exc:
             # e.g. already on the watchlist
             log.info("Could not add %r (already on watchlist? %s)", entry.title, exc)
@@ -332,13 +399,67 @@ def sync(dry_run: bool = False) -> int:
             failed += 1
 
     if not dry_run:
-        save_state(config["state_file"], state)
+        save_json(config["state_file"], state)
 
     log.info(
         "Sync complete: matched=%d skipped=%d unmatched=%d failed=%d",
         matched, skipped, unmatched, failed,
     )
+
+    if not dry_run:
+        total_synced = sum(1 for v in state.values() if v.get("status") == "matched")
+        report_success(config, meta, added_titles, total_synced)
+
     return 0
+
+
+def report_success(config: dict, meta: dict, added_titles: list, total_synced: int) -> None:
+    now = time.time()
+    meta["last_run_at"] = now
+    meta.pop("failing_since", None)
+    meta.setdefault("last_spoke_at", now)
+
+    if added_titles:
+        preview = ", ".join(added_titles[:3])
+        if len(added_titles) > 3:
+            preview += f", and {len(added_titles) - 3} more"
+        plural = "s" if len(added_titles) != 1 else ""
+        notify(f"Added {len(added_titles)} film{plural} to your watchlist", preview)
+        meta["last_spoke_at"] = now
+        meta["last_added_at"] = now
+
+    elif now - meta["last_spoke_at"] >= config["heartbeat_days"] * 86400:
+        # The point of the heartbeat: a healthy, quiet job is indistinguishable
+        # from a dead one unless it says something on its own schedule.
+        quiet_days = int((now - meta["last_spoke_at"]) / 86400)
+        notify(
+            f"Still running · {total_synced} films synced",
+            f"Nothing new in {quiet_days} days. {home_relative(BASE_DIR)}",
+        )
+        meta["last_spoke_at"] = now
+
+    save_json(config["meta_file"], meta)
+
+
+def report_failure(config: dict, meta: dict, reason: str, dry_run: bool) -> None:
+    if dry_run:
+        return
+
+    now = time.time()
+    meta["last_run_at"] = now
+    meta.setdefault("failing_since", now)
+
+    # Broken at a 4-hour cadence would mean six notifications a day, which
+    # teaches you to ignore them. One a day is enough to stay noticed.
+    last_told = meta.get("last_failure_notified_at", 0)
+    if now - last_told >= 86400:
+        down_days = int((now - meta["failing_since"]) / 86400)
+        detail = f"Failing for {down_days} days. " if down_days else ""
+        notify("Sync is failing", f"{detail}{reason}")
+        meta["last_failure_notified_at"] = now
+        meta["last_spoke_at"] = now
+
+    save_json(config["meta_file"], meta)
 
 
 def main() -> None:
@@ -349,7 +470,15 @@ def main() -> None:
         help="Log what would happen without modifying the Plex watchlist or state file",
     )
     args = parser.parse_args()
-    sys.exit(sync(dry_run=args.dry_run))
+
+    try:
+        sys.exit(sync(dry_run=args.dry_run))
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001 - a crash must not be a silent crash
+        log.exception("Sync crashed")
+        notify("Sync crashed", f"{type(exc).__name__}: {exc}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

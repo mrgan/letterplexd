@@ -55,6 +55,9 @@ letterboxd-plex-sync/
 | `MATCH_SCORE_THRESHOLD` | Minimum title-similarity score (0-1) to accept a fuzzy match when titles don't line up exactly (default `0.9`) |
 | `YEAR_TOLERANCE` | How many years a Plex result may differ from the Letterboxd year and still be considered the same film (default `1`) |
 | `WATCHLIST_LIMIT` | Sync only the N most recently added films; `0` or unset syncs the whole list (default `0`) |
+| `META_FILE` | Path to the run-metadata JSON used for notification timing (default `state/meta.json`) |
+| `NOTIFY` | `0` to silence macOS notifications (default `1`) |
+| `HEARTBEAT_DAYS` | Days of silence before posting a "still running" notification (default `30`) |
 
 ### Getting a Plex token
 
@@ -129,6 +132,42 @@ runs, which at the default 4-hour schedule is not a realistic concern.
 The limit also stops pagination early, so a small limit makes runs much faster
 (5 pages instead of 33 at `WATCHLIST_LIMIT=132`).
 
+## Staying aware of it
+
+This runs unattended every 4 hours for months at a time, which creates two
+problems that look nothing alike but have the same fix.
+
+The obvious one is forgetting it exists. The dangerous one is **silent
+breakage**: the sync depends on scraping Letterboxd's HTML, and if that markup
+changes, `fetch_letterboxd_watchlist` matches no posters and returns an empty
+list. Without a guard that run does nothing, reports `matched=0`, and exits
+`0` — indistinguishable from a healthy run with nothing new to do. The
+watchlist would quietly stop syncing while every available signal said it was
+fine. So an empty scrape is treated as a failure, not as an empty watchlist.
+The cost is that a genuinely emptied watchlist reports an error, which is the
+right trade at the frequency these two things actually happen.
+
+Both problems are answered by having the job speak for itself, via
+`osascript` (no dependency to install). It notifies:
+
+- **when films are added** — the useful case, and proof it's alive;
+- **on failure** — unreachable Letterboxd, an empty scrape, a rejected Plex
+  token, or any unhandled crash, each rate-limited to one notification per day
+  so a persistent break doesn't train you to ignore them;
+- **on a heartbeat** — after `HEARTBEAT_DAYS` of silence it says "still
+  running", names the film count, and prints its own directory.
+
+`state/meta.json` tracks `last_spoke_at` for this. *Any* notification resets
+that clock, so the heartbeat only fires when the job has genuinely had nothing
+to say — you hear from it roughly monthly at worst, not monthly on top of
+everything else.
+
+The heartbeat naming the project directory is deliberate: months from now the
+notification itself should be enough to find and stop this thing, without
+remembering it was launchd or hunting through `~/Library/LaunchAgents`.
+
+Notifications are suppressed under `--dry-run`.
+
 ## Known limitations
 
 - One-way only: removing a film from Letterboxd does not remove it from
@@ -161,6 +200,20 @@ See `com.neven.letterboxd-plex-sync.plist`. Install with:
 ```bash
 cp com.neven.letterboxd-plex-sync.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.neven.letterboxd-plex-sync.plist
+```
+
+`RunAtLoad` means bootstrapping runs the script once immediately, which
+doubles as a check that it works under launchd's much thinner environment.
+
+Note that `logs/launchd.err.log` collects the script's *normal* output, not
+just errors: Python's `StreamHandler` defaults to stderr, so every `INFO` line
+lands there and `launchd.out.log` stays empty. A non-empty `.err.log` is not a
+problem on its own — read it before worrying.
+
+Check on it with:
+
+```bash
+launchctl print gui/$(id -u)/com.neven.letterboxd-plex-sync | grep -E "state =|last exit code|runs ="
 ```
 
 Uninstall / stop with:
