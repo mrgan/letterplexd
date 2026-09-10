@@ -170,6 +170,7 @@ def save_json(path: Path, data: dict) -> None:
 
 
 NOTIFY_TITLE = "Letterboxd → Plex"
+NOTIFIER_APP = BASE_DIR / "notifier" / "Letterboxd Sync.app" / "Contents" / "MacOS" / "applet"
 notifications_enabled = True
 
 
@@ -180,18 +181,43 @@ def notify(subtitle: str, message: str) -> None:
     if not notifications_enabled:
         return
 
-    def escape(text: str) -> str:
-        return text.replace("\\", "\\\\").replace('"', '\\"')
+    env = {
+        **os.environ,
+        "LPS_TITLE": NOTIFY_TITLE,
+        "LPS_SUBTITLE": subtitle,
+        "LPS_MESSAGE": message,
+    }
 
-    script = (
-        f'display notification "{escape(message)}" '
-        f'with title "{escape(NOTIFY_TITLE)}" '
-        f'subtitle "{escape(subtitle)}"'
-    )
     try:
-        subprocess.run(["osascript", "-e", script], capture_output=True, timeout=10)
+        if NOTIFIER_APP.exists():
+            # Notifications inherit the posting process's bundle identity, so
+            # going through our own app makes them read as "Letterboxd Sync"
+            # rather than "Script Editor".
+            subprocess.run([str(NOTIFIER_APP)], env=env, capture_output=True, timeout=10)
+        else:
+            # Unbuilt bundle shouldn't cost us the notification entirely.
+            log.warning("Notifier app not built; falling back to osascript")
+            script = (
+                f'display notification {applescript_string(message)} '
+                f'with title {applescript_string(NOTIFY_TITLE)} '
+                f'subtitle {applescript_string(subtitle)}'
+            )
+            subprocess.run(["osascript", "-e", script], capture_output=True, timeout=10)
     except Exception as exc:  # noqa: BLE001
         log.warning("Could not post notification: %s", exc)
+
+
+def applescript_string(text: str) -> str:
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def short_reason(exc: Exception) -> str:
+    # Notifications are three lines at most, so they get the gist; the full
+    # error is already in the log for whoever goes looking.
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status:
+        return f"HTTP {status}"
+    return type(exc).__name__
 
 
 def home_relative(path: Path) -> str:
@@ -297,7 +323,7 @@ def sync(dry_run: bool = False) -> int:
         )
     except Exception as exc:  # noqa: BLE001
         log.error("Failed to fetch Letterboxd watchlist: %s", exc)
-        report_failure(config, meta, f"Couldn't reach Letterboxd: {exc}", dry_run)
+        report_failure(config, meta, f"Couldn't reach Letterboxd ({short_reason(exc)})", dry_run)
         return 1
 
     # An empty scrape is the shape a Letterboxd markup change takes: no posters
@@ -325,7 +351,9 @@ def sync(dry_run: bool = False) -> int:
         account = MyPlexAccount(token=config["token"])
     except Exception as exc:  # noqa: BLE001 - an expired token surfaces here
         log.error("Could not sign in to Plex: %s", exc)
-        report_failure(config, meta, f"Plex sign-in failed: {exc}", dry_run)
+        report_failure(
+            config, meta, f"Plex sign-in failed ({short_reason(exc)}); check PLEX_TOKEN", dry_run
+        )
         return 1
 
     state = load_json(config["state_file"])

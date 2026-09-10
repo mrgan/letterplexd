@@ -38,7 +38,11 @@ letterboxd-plex-sync/
   sync.py                  # main script
   requirements.txt
   .env.example             # copy to .env and fill in
+  notifier/
+    notifier.applescript   # source for the notification app bundle
+    build.sh               # compiles it; the built .app is gitignored
   state/synced.json        # created at runtime, gitignored
+  state/meta.json          # notification timing, created at runtime
   logs/sync.log            # created at runtime, gitignored
   com.neven.letterboxd-plex-sync.plist   # launchd template
 ```
@@ -147,8 +151,7 @@ fine. So an empty scrape is treated as a failure, not as an empty watchlist.
 The cost is that a genuinely emptied watchlist reports an error, which is the
 right trade at the frequency these two things actually happen.
 
-Both problems are answered by having the job speak for itself, via
-`osascript` (no dependency to install). It notifies:
+Both problems are answered by having the job speak for itself. It notifies:
 
 - **when films are added** — the useful case, and proof it's alive;
 - **on failure** — unreachable Letterboxd, an empty scrape, a rejected Plex
@@ -167,6 +170,36 @@ notification itself should be enough to find and stop this thing, without
 remembering it was launchd or hunting through `~/Library/LaunchAgents`.
 
 Notifications are suppressed under `--dry-run`.
+
+### Why there's an app bundle
+
+macOS attributes a notification to the bundle of the process that posts it, so
+a plain `osascript` call shows up as **Script Editor** with Script Editor's
+icon — an app you didn't run, named above an alert meant to explain itself
+months later. `notifier/` solves that: a tiny AppleScript applet compiled into
+`Letterboxd Sync.app`, whose `Info.plist` carries our own bundle name and
+identifier. `sync.py` runs its `Contents/MacOS/applet` directly, so the
+notification inherits *that* identity.
+
+Build (or rebuild, after editing the script) with:
+
+```bash
+./notifier/build.sh
+```
+
+The built `.app` is gitignored — only the AppleScript source and build script
+are checked in, the same way `venv/` is rebuilt rather than committed. If it's
+missing, `notify()` logs a warning and falls back to plain `osascript`, so an
+unbuilt bundle costs you the nice name, not the notification.
+
+The text passes through `LPS_TITLE` / `LPS_SUBTITLE` / `LPS_MESSAGE`
+environment variables rather than being interpolated into an AppleScript
+string, which sidesteps quoting bugs on film titles containing apostrophes or
+quotes.
+
+The bundle has no custom icon, so it inherits the generic applet one. Dropping
+an `.icns` into `Contents/Resources/` and pointing `CFBundleIconFile` at it in
+`build.sh` would fix that.
 
 ## Known limitations
 

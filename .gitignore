@@ -4,3 +4,4 @@ state/
 logs/
 __pycache__/
 *.pyc
+notifier/*.app
