@@ -46,6 +46,9 @@ letterplexd/
   notifier/
     notifier.applescript   # source for the notification app bundle
     build.sh               # compiles it; the built .app is gitignored
+    Letterplexd.icon       # Icon Composer source
+    Assets.car             # that source compiled by Xcode (a build input)
+    icon-1024.png          # flat export, for the .icns fallback
   state/synced.json        # created at runtime, gitignored
   state/meta.json          # notification timing, created at runtime
   logs/sync.log            # created at runtime, gitignored
@@ -214,9 +217,40 @@ shell does not re-expand an expanded value, titles containing `$` or backticks
 If notifications ever start showing `√` and `Ü` sequences, this is the cause —
 check `utf8Env` in `notifier.applescript` rather than the sending side.
 
-The bundle has no custom icon, so it inherits the generic applet one. Dropping
-an `.icns` into `Contents/Resources/` and pointing `CFBundleIconFile` at it in
-`build.sh` would fix that.
+### The app icon
+
+The bundle carries **two** icons, which is what Apple's own apps do — Calculator,
+Notes and Music on macOS 27 all ship both:
+
+| File | Info.plist key | Used by |
+|---|---|---|
+| `Assets.car` | `CFBundleIconName` | macOS 26 (Tahoe) and later — the layered Icon Composer icon, rendered live with its glass, refraction and dark variant |
+| `AppIcon.icns` | `CFBundleIconFile` | Anything older, which ignores `CFBundleIconName` entirely |
+
+`build.sh` installs both, and `notifier/` holds all three inputs:
+
+- `Letterplexd.icon` — the Icon Composer source, for editing the design.
+- `Assets.car` — that source *compiled*. Committed deliberately, see below.
+- `icon-1024.png` — a flat 1024×1024 export, from which `build.sh` generates the
+  ten iconset sizes with `sips` and packs them via `iconutil`.
+
+**Why the compiled `Assets.car` is committed rather than built here.** A `.icon`
+can only be compiled by Xcode's asset pipeline. `actool` refuses it from the
+command line — passed directly it reports `Could not open` and then throws an
+internal exception; placed inside an `.xcassets` it compiles silently and emits
+nothing. The working route is a throwaway Xcode macOS App project with the
+`.icon` assigned as the target's app icon; `Assets.car` is then lifted out of
+the build product. That's a manual step nobody should have to repeat, so its
+output is committed as a build input (1.9 MB).
+
+To change the icon: edit `Letterplexd.icon` in Icon Composer, rebuild it through
+an Xcode project, replace `Assets.car`, export a fresh flat PNG over
+`icon-1024.png`, and run `./notifier/build.sh`.
+
+One ordering detail that bit once: `osacompile` leaves its own generic
+`applet.icns` behind as `CFBundleIconFile`. `build.sh` deletes that key and file
+*before* installing either icon, otherwise the stale applet icon competes for
+what macOS actually displays.
 
 ## Known limitations
 
@@ -274,9 +308,7 @@ isn't this one.
 
 ### Needs you specifically
 
-- [ ] **Design an app icon.** The notifier bundle inherits `osacompile`'s
-  generic applet icon. Save an `.icns` as `notifier/icon.icns`; wiring
-  `CFBundleIconFile` into `build.sh` is a one-line follow-up.
+- [x] ~~**Design an app icon.**~~ Done — see "The app icon" above.
 - [ ] **Check Notification Center settings** for "Letterplexd" (System
   Settings → Notifications). Worth doing once, deliberately: if alerts are set
   to "none", or Focus filters them out, the monthly heartbeat is silently
